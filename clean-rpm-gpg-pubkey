@@ -1,0 +1,159 @@
+#! /usr/bin/perl
+
+use IO::File;
+use File::Temp qw(tempdir);
+use strict;
+use warnings;
+use Getopt::Long;
+use POSIX qw(uname);
+
+my $dry_run;
+my $usage;
+
+my $keys = "/etc/yum.repos.d";
+
+GetOptions ("dry-run" => \$dry_run,
+	    "usage" => \$usage,
+	    "help" => \$usage)
+    or die("Error in command line arguments\n");
+
+if ($usage)
+{
+    print "Usage: $0 [--dry-run]\n\n";
+    print "    Removes all RPM PGP keys except the ones from $keys\n";
+    exit(0);
+}
+
+my $releasever = IO::File->new;
+
+open($releasever, "-|",
+     "rpm",
+     "-q",
+     '--queryformat=%{VERSION}\n',
+     "fedora-release-common");
+
+my $version = <$releasever>;
+close($releasever);
+
+die "Cannot read fedora-release-common version\n"
+    unless defined $version;
+chomp $version;
+
+my $arch = [ POSIX::uname ]->[4];
+
+my $dir = tempdir(CLEANUP => 1);
+
+chmod(0700, $dir);
+
+my $gpg = "gpg2";
+
+my %gpgkeys;
+
+foreach my $key (glob("$keys/*.repo"))
+{
+    my $fh = IO::File->new($key, "r");
+
+    while (defined(my $line=<$fh>))
+    {
+	chomp $line;
+
+	next unless $line =~ s/^gpgkey=//;
+
+	foreach my $url (split(/\s+/, $line))
+	{
+	    die "gpgkey in $key is not a file://\n"
+		unless $url =~ s@^file:///@/@;
+
+	    $url =~ s@\$releasever@$version@;
+	    $url =~ s@\$basearch@$arch@;
+
+	    $gpgkeys{$url} = 1;
+	}
+    }
+}
+
+foreach my $file (sort keys %gpgkeys)
+{
+    system($gpg, "--homedir",
+	$dir,
+	"--quiet",
+	"--import",
+	$file) == 0 or die "Could not import $file";
+}
+
+my $count_keys = sub {
+
+    my $fh = IO::File->new;
+
+    open($fh, "-|",
+	$gpg, "--homedir", $dir, "--list-keys", "--with-colons");
+
+    my $counter = 0;
+
+    ++$counter for <$fh>;
+
+    return $counter;
+};
+
+my $n_keys = $count_keys->();
+
+my @packages;
+
+{
+    my $fh = IO::File->new;
+
+    open($fh, "-|", "rpm", "-q", "gpg-pubkey");
+
+    while (defined(my $p=<$fh>))
+    {
+	chomp $p;
+
+	push @packages, $p;
+    }
+}
+
+my $removed_counter = 0;
+
+foreach my $p (@packages)
+{
+    my $key = IO::File->new;
+
+    my $gpg_imp = IO::File->new;
+
+    open($key, "-|", "rpm", "-q", "-i", $p);
+
+    open($gpg_imp, "|-", $gpg, "--homedir", $dir, "--quiet", "--import");
+
+    while (defined(my $line=<$key>))
+    {
+	print $gpg_imp $line;
+    }
+
+    die "Cannot import PGP key from $p\n"
+	unless close($key) && $? == 0 && close($gpg_imp) && $? == 0;
+
+    my $n_now_keys = $count_keys->();
+
+    if ($n_now_keys != $n_keys)
+    {
+	system("rpm",
+	       "-q",
+	       '--queryformat=' .
+	       ($dry_run ? "Would've removed":"Removing")
+	       . ' %{SUMMARY}\n',
+	       $p) == 0
+	    or die "Cannot log removal of $p\n";
+	     
+	++$removed_counter;
+	unless ($dry_run)
+	{
+	    system("rpm",
+		   "-e",
+		   $p) == 0
+		or die "Cannot remove $p\n";
+	}
+	$n_keys = $n_now_keys;
+    }
+}
+
+print "Total affected keys: $removed_counter\n";
