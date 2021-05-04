@@ -61,8 +61,9 @@ foreach my $key (glob("$keys/*.repo"))
 
 	foreach my $url (split(/\s+/, $line))
 	{
-	    die "gpgkey in $key is not a file://\n"
-		unless $url =~ s@^file:///@/@;
+	    die "gpgkey in $key is using an unsupported URL\n"
+		unless $url =~ m@^file:///@
+		|| $url =~ m@^https?://@;
 
 	    $url =~ s@\$releasever@$version@;
 	    $url =~ s@\$basearch@$arch@;
@@ -74,11 +75,21 @@ foreach my $key (glob("$keys/*.repo"))
 
 foreach my $file (sort keys %gpgkeys)
 {
+    my $fh = IO::File->new;
+
+    system("curl",
+	"-o",
+	"$dir/tmpimportkey.gpg",
+	"--silent",
+	"--show-error",
+	$file) == 0 or die "Could not execute curl\n";
+
     system($gpg, "--homedir",
 	$dir,
 	"--quiet",
 	"--import",
-	$file) == 0 or die "Could not import $file";
+	"$dir/tmpimportkey.gpg"
+	) == 0 or die "Could not import $file";
 }
 
 my $count_keys = sub {
@@ -143,7 +154,7 @@ foreach my $p (@packages)
 	       . ' %{SUMMARY}\n',
 	       $p) == 0
 	    or die "Cannot log removal of $p\n";
-	     
+
 	++$removed_counter;
 	unless ($dry_run)
 	{

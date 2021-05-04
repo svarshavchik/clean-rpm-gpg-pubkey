@@ -11,6 +11,7 @@ If an old PGP key was compromised (this has happened once before)
 everyone needs to scramble and remove the affected PGP keys. Well, you've
 already done that, so rest easy.
 
-Nothing to install here, just download and run the script. There's a
+Nothing to install here, just download and run the script, but curl needs
+to be installed, in all cases (even if all keys are local). There's a
 --dry-run option that does nothing but list the affected PGP keys that
 would be removed. Running the script without arguments does it for real.
