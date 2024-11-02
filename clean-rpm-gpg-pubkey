@@ -49,14 +49,29 @@ my $gpg = "gpg2";
 
 my %gpgkeys;
 
-foreach my $key (glob("$keys/*.repo"))
+foreach my $key (sort glob("$keys/*.repo"))
 {
     my $fh = IO::File->new($key, "r");
+
+    my $repository = {};
+    my $repository_name = "";
 
     while (defined(my $line=<$fh>))
     {
 	chomp $line;
 
+	if ($line =~ /^\[/)
+	{
+	    $repository = {};
+	    $repository_name = $line;
+
+	    $repository_name =~ s/[\s\[\]]//g;
+	}
+
+	if ($line =~ /(.*)=(.*)/)
+	{
+	    $repository->{$1} = $2;
+	}
 	next unless $line =~ s/^gpgkey=//;
 
 	foreach my $url (split(/\s+/, $line))
@@ -65,10 +80,14 @@ foreach my $key (glob("$keys/*.repo"))
 		unless $url =~ m@^file:///@
 		|| $url =~ m@^https?://@;
 
-	    $url =~ s@\$releasever@$version@;
-	    $url =~ s@\$basearch@$arch@;
+	    $url =~ s@\$releasever@$version@g;
+	    $url =~ s@\$basearch@$arch@g;
 
-	    $gpgkeys{$url} = 1;
+	    push @{$gpgkeys{$url} //= []}, {
+		file => $key,
+		name => $repository_name,
+		meta => $repository,
+	    };
 	}
     }
 }
@@ -76,6 +95,24 @@ foreach my $key (glob("$keys/*.repo"))
 foreach my $file (sort keys %gpgkeys)
 {
     my $fh = IO::File->new;
+
+    my $info = $gpgkeys{$file};
+
+    print "Downloading $file for:\n";
+
+    foreach my $source (sort {
+	$a->{name} cmp $b->{name} ||
+	    $a->{file} cmp $b->{file}
+	} @$info)
+    {
+	my $name =
+	    $source->{meta}{name} // $source->{name};
+
+	$name =~ s@\$releasever@$version@g;
+	$name =~ s@\$basearch@$arch@g;
+
+	print "  $name (" . $source->{file} . ")\n";
+    }
 
     system("curl",
 	"-o",
