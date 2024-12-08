@@ -119,6 +119,7 @@ foreach my $file (sort keys %gpgkeys)
 	"$dir/tmpimportkey.gpg",
 	"--silent",
 	"--show-error",
+        "--location",
 	$file) == 0 or die "Could not execute curl\n";
 
     system($gpg, "--homedir",
