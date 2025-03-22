@@ -30,13 +30,12 @@ open($releasever, "-|",
      "rpm",
      "-q",
      '--queryformat=%{VERSION}\n',
+     "--whatprovides",
      "fedora-release-common");
 
 my $version = <$releasever>;
-close($releasever);
-
-die "Cannot read fedora-release-common version\n"
-    unless defined $version;
+close($releasever)
+    or die "Cannot read fedora-release-common version\n";
 chomp $version;
 
 my $arch = [ POSIX::uname ]->[4];
