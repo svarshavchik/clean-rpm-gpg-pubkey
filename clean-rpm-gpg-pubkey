@@ -150,12 +150,13 @@ my @packages;
 {
     my $fh = IO::File->new;
 
-    open($fh, "-|", "rpm", "-q", "gpg-pubkey");
+    open($fh, "-|", "rpmkeys", "--list");
 
     while (defined(my $p=<$fh>))
     {
 	chomp $p;
 
+	$p =~ s/:.*//;
 	push @packages, $p;
     }
 }
@@ -168,7 +169,7 @@ foreach my $p (@packages)
 
     my $gpg_imp = IO::File->new;
 
-    open($key, "-|", "rpm", "-q", "-i", $p);
+    open($key, "-|", "rpm", "-q", "-i", "gpg-pubkey-$p");
 
     open($gpg_imp, "|-", $gpg, "--homedir", $dir, "--quiet", "--import");
 
@@ -189,14 +190,14 @@ foreach my $p (@packages)
 	       '--queryformat=' .
 	       ($dry_run ? "Would've removed":"Removing")
 	       . ' %{SUMMARY}\n',
-	       $p) == 0
+	       "gpg-pubkey-$p") == 0
 	    or die "Cannot log removal of $p\n";
 
 	++$removed_counter;
 	unless ($dry_run)
 	{
-	    system("rpm",
-		   "-e",
+	    system("rpmkeys",
+		   "--delete",
 		   $p) == 0
 		or die "Cannot remove $p\n";
 	}
