@@ -146,6 +146,7 @@ my $count_keys = sub {
 my $n_keys = $count_keys->();
 
 my @packages;
+my %descr;
 
 {
     my $fh = IO::File->new;
@@ -156,8 +157,11 @@ my @packages;
     {
 	chomp $p;
 
-	$p =~ s/\s.*//;
-	push @packages, $p;
+	if ($p =~ /([^\s]+)\s+(.*)/)
+	{
+	    $descr{$1} = $2;
+	    push @packages, $1;
+	}
     }
 }
 
@@ -169,7 +173,7 @@ foreach my $p (@packages)
 
     my $gpg_imp = IO::File->new;
 
-    open($key, "-|", "rpm", "-q", "-i", "gpg-pubkey-$p");
+    open($key, "-|", "rpmkeys", "--export", "$p");
 
     open($gpg_imp, "|-", $gpg, "--homedir", $dir, "--quiet", "--import");
 
@@ -185,13 +189,8 @@ foreach my $p (@packages)
 
     if ($n_now_keys != $n_keys)
     {
-	system("rpm",
-	       "-q",
-	       '--queryformat=' .
-	       ($dry_run ? "Would've removed":"Removing")
-	       . ' %{SUMMARY}\n',
-	       "gpg-pubkey-$p") == 0
-	    or die "Cannot log removal of $p\n";
+	print (($dry_run ? "Would've removed: ":"Removing: ") . " "
+	    . $descr{$p} . "\n");
 
 	++$removed_counter;
 	unless ($dry_run)
