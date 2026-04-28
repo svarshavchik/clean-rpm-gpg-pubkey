@@ -189,7 +189,7 @@ foreach my $p (@packages)
 
     if ($n_now_keys != $n_keys)
     {
-	print (($dry_run ? "Would've removed: ":"Removing: ") . " "
+	print(($dry_run ? "Would've removed" : "Removing") . " "
 	    . $descr{$p} . "\n");
 
 	++$removed_counter;
