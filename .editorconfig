@@ -1,0 +1,6 @@
+root = true
+
+[clean-rpm-gpg-pubkey]
+indent_size = 4
+indent_style = tab
+tab_width = 8
