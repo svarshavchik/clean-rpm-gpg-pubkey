@@ -10,7 +10,11 @@ use POSIX qw(uname);
 my $dry_run;
 my $usage;
 
-my $keys = "/etc/yum.repos.d";
+my @keys = (
+    "/etc/yum.repos.d",
+    "/etc/distro.repos.d",
+    "/usr/share/dnf5/repos.d"
+    );
 
 GetOptions ("dry-run" => \$dry_run,
 	    "usage" => \$usage,
@@ -20,7 +24,8 @@ GetOptions ("dry-run" => \$dry_run,
 if ($usage)
 {
     print "Usage: $0 [--dry-run]\n\n";
-    print "    Removes all RPM PGP keys except the ones from $keys\n";
+    print "    Removes all RPM PGP keys except the ones from:\n"
+	. join("", map{ "\t$_\n"} @keys);
     exit(0);
 }
 
@@ -48,8 +53,17 @@ my $gpg = "gpg2";
 
 my %gpgkeys;
 
-foreach my $key (sort glob("$keys/*.repo"))
+my %seen;
+
+foreach my $key (map { sort glob("$_/*.repo")} @keys)
 {
+    next unless -f $key;
+
+    my $base = $key;
+
+    $base =~ s/.*\///;
+    next if $seen{$base}++;
+
     my $fh = IO::File->new($key, "r");
 
     my $repository = {};
